@@ -266,9 +266,85 @@ let test10 (ctx: context): unit =
 	print_model solver;
 	print_proof solver
 
+(*
+	S = DeclareSort('S')
+	f = Function('f', S, S)
+	x = Const('x', S)
+	solve(f(f(x)) == x, f(f(f(x))) == x)
+	solve(f(f(x)) == x, f(f(f(x))) == x, f(x) != x)
+*)
+let test11 (ctx: context): unit =
+	let s_sort: Sort.sort = Sort.mk_uninterpreted_s ctx "S" in
+	let f_func: FuncDecl.func_decl = FuncDecl.mk_func_decl_s ctx "f" [s_sort] s_sort in
+	let x: Expr.expr = Expr.mk_const_s ctx "x" s_sort in
+	let f (x: Expr.expr): Expr.expr = (FuncDecl.apply f_func [x]) in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [Boolean.mk_eq ctx (f (f x)) x; Boolean.mk_eq ctx (f (f (f x))) x];
+	print_check solver;
+	print_model solver;
+	Solver.reset solver;	
+	Solver.add solver [Boolean.mk_eq ctx (f (f x)) x; 
+		Boolean.mk_eq ctx (f (f (f x))) x; Boolean.mk_not ctx (Boolean.mk_eq ctx (f x) x)];
+	print_check solver;
+	print_model solver
+
+let mk_neq (ctx: context) (a: Expr.expr) (b: Expr.expr): Expr.expr = 
+	Boolean.mk_not ctx (Boolean.mk_eq ctx a b)
+
+let reals (ctx: context) (s_li: string list): Expr.expr list = 
+	List.map (fun a -> Arithmetic.Real.mk_const_s ctx a) s_li
+
+(*
+	S = DeclareSort('S')
+	a, b, c, d, e, s, t = Consts('a b c d e s t', S)
+	f = Function('f', S, S, S)
+	g = Function('g', S, S)
+	solve([a == b, b == c, d == e, b == s, d == t, f(a, g(d)) != f(g(e), b)])
+*)
+let test12 (ctx: context): unit =
+	let s_sort: Sort.sort = Sort.mk_uninterpreted_s ctx "S" in
+	let a: Expr.expr = Expr.mk_const_s ctx "a" s_sort in
+	let b: Expr.expr = Expr.mk_const_s ctx "b" s_sort in
+	let c: Expr.expr = Expr.mk_const_s ctx "c" s_sort in
+	let d: Expr.expr = Expr.mk_const_s ctx "d" s_sort in
+	let e: Expr.expr = Expr.mk_const_s ctx "e" s_sort in
+	let s: Expr.expr = Expr.mk_const_s ctx "s" s_sort in
+	let t: Expr.expr = Expr.mk_const_s ctx "t" s_sort in
+	let f_func: FuncDecl.func_decl = FuncDecl.mk_func_decl_s ctx "f" [s_sort; s_sort] s_sort in
+	let g_func: FuncDecl.func_decl = FuncDecl.mk_func_decl_s ctx "g" [s_sort] s_sort in
+	let f (x: Expr.expr) (y: Expr.expr): Expr.expr = (FuncDecl.apply f_func [x; y]) in
+	let g (x: Expr.expr): Expr.expr = (FuncDecl.apply g_func [x]) in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [Boolean.mk_eq ctx a b; Boolean.mk_eq ctx b c;
+			Boolean.mk_eq ctx d e; Boolean.mk_eq ctx b s; Boolean.mk_eq ctx d t;
+			mk_neq ctx (f a (g d)) (f (g e) b)];
+	print_check solver;
+	print_model solver
+
+(*
+	x, y = Reals('x y')
+	solve([x >= 0, Or(x + y <= 2, x + 2*y >= 6), Or(x + y >= 2, x + 2*y > 4)])
+*)
+let test13 (ctx: context): unit =
+	let zero: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 0 in
+	let two: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 2 in
+	let four: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 4 in
+	let six: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 6 in
+	let x: Expr.expr = Arithmetic.Real.mk_const_s ctx "x" in
+	let y: Expr.expr = Arithmetic.Real.mk_const_s ctx "y" in
+	let temp1: Expr.expr = Arithmetic.mk_add ctx [x; y] in
+	let temp2: Expr.expr = Arithmetic.mk_add ctx [x; Arithmetic.mk_mul ctx [two; y]] in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [
+			Arithmetic.mk_ge ctx x zero; 
+			Boolean.mk_or ctx [(Arithmetic.mk_le ctx temp1 two); (Arithmetic.mk_ge ctx temp2 six)];
+			Boolean.mk_or ctx [(Arithmetic.mk_ge ctx temp1 two); (Arithmetic.mk_gt ctx temp2 four)]
+		];
+	print_check solver;
+	print_model solver	
 
 let _ = 
 	let cfg = [("model", "true"); ("proof", "true")] in
 	let ctx = (mk_context cfg) in
-	test10 ctx
+	test13 ctx
 ;;
