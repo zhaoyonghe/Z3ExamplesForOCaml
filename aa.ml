@@ -15,6 +15,7 @@ open Z3.Arithmetic
 open Z3.Arithmetic.Integer
 open Z3.Arithmetic.Real
 open Z3.BitVector
+open Z3.Quantifier
 
 let print_check (solver: Solver.solver): unit =
 	Printf.printf "%s\n" (string_of_status (Solver.check solver []))
@@ -26,6 +27,15 @@ let print_model (solver: Solver.solver): unit =
 		| None -> Printf.printf "no model\n"		
 	with
 	| _ -> Printf.printf "no model\n"
+	(* It should return None, but actually raises error. *)
+
+let print_proof (solver: Solver.solver): unit = 
+	try
+		match (Solver.get_proof solver) with
+		| Some p -> Printf.printf "%s\n" (Expr.to_string p)
+		| None -> Printf.printf "no proof\n"		
+	with
+	| _ -> Printf.printf "no get_proof\n"
 	(* It should return None, but actually raises error. *)
 
 (*
@@ -168,8 +178,97 @@ let test6 (ctx: context): unit =
 	Printf.printf "operator: %s\n" (FuncDecl.to_string (Expr.get_func_decl n));
 	Printf.printf "op name: %s\n" (Symbol.to_string (FuncDecl.get_name (Expr.get_func_decl n)))
 
+
+(*
+	solve([y == x + 1, ForAll([y], Implies(y <= 0, x < y))])
+	<==> alpha conversion
+	solve([y == x + 1, ForAll([z], Implies(z <= 0, x < z))])
+	unsatisfiable
+*)
+let test7 (ctx: context): unit =
+	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
+	let y: Expr.expr = Arithmetic.Integer.mk_const_s ctx "y" in	
+	let zero: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 0 in
+	let one: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 1 in
+	let q: Quantifier.quantifier = 
+		Quantifier.mk_forall_const ctx [y] 
+		(Boolean.mk_implies ctx (Arithmetic.mk_le ctx y zero) (Arithmetic.mk_lt ctx x y)) 
+		(Some 1) [] [] None None in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [Boolean.mk_eq ctx y (Arithmetic.mk_add ctx [x; one]); Quantifier.expr_of_quantifier q];
+	print_check solver;
+	print_model solver
+
+(*
+	solve([y == x + 1, ForAll([y], Implies(y <= 0, x > y))])
+	<==> alpha conversion
+	solve([y == x + 1, ForAll([z], Implies(z <= 0, x > z))])
+	unsatisfiable
+*)
+let test8 (ctx: context): unit =
+	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
+	let y: Expr.expr = Arithmetic.Integer.mk_const_s ctx "y" in	
+	let zero: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 0 in
+	let one: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 1 in
+	let q: Quantifier.quantifier = 
+		Quantifier.mk_forall_const ctx [y] 
+		(Boolean.mk_implies ctx (Arithmetic.mk_le ctx y zero) (Arithmetic.mk_gt ctx x y)) 
+		(Some 1) [] [] None None in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [Boolean.mk_eq ctx y (Arithmetic.mk_add ctx [x; one]); Quantifier.expr_of_quantifier q];
+	print_check solver;
+	print_model solver
+
+(*
+	m, m1 = Array('m', Z, Z), Array('m1', Z, Z)
+	def memset(lo, hi, y, m):
+		return Lambda([x], If(And(lo <= x, x <= hi), y, Select(m, x)))
+	solve([m1 == memset(1, 700, z, m), Select(m1, 6) != z])
+
+let test9 (ctx: context): unit =
+	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
+	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
+	let z: Expr.expr = Arithmetic.Integer.mk_const_s ctx "z" in
+	let one: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 1 in
+	let sevenhundred: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 700 in
+	let six: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 6 in
+	let m: Expr.expr = Z3Array.mk_const_s ctx "m" int_sort int_sort in
+	let m1: Expr.expr = Z3Array.mk_const_s ctx "m1" int_sort int_sort in
+	let memset (lo: Expr.expr) (hi: Expr.expr) (y: Expr.expr) (m: Expr.expr): Expr.expr = 
+		let p: Expr.expr = Boolean.mk_and ctx [Arithmetic.mk_le ctx lo x; Arithmetic.mk_le ctx x hi] in
+		let q = Quantifier.mk_lambda_const ctx [x] (Boolean.mk_ite ctx p y (Z3Array.mk_select ctx m x)) in
+		Quantifier.expr_of_quantifier q
+	in
+	let temp1: Expr.expr = Boolean.mk_eq ctx m1 (memset one sevenhundred z m) in
+	let temp2: Expr.expr = Boolean.mk_not ctx (Boolean.mk_eq ctx (Z3Array.mk_select ctx m1 six) z) in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [temp1; temp2];
+	print_check solver;
+	print_model solver
+*)
+
+(*
+	Q = Array('Q', Z, B)
+	prove(Implies(ForAll(Q, Implies(Select(Q, x), Select(Q, y))), x == y))
+*)
+let test10 (ctx: context): unit =
+	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
+	let bool_sort: Sort.sort = Boolean.mk_sort ctx in
+	let q_arr: Expr.expr = Z3Array.mk_const_s ctx "Q" int_sort bool_sort in
+	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
+	let y: Expr.expr = Arithmetic.Integer.mk_const_s ctx "y" in
+	let imp: Expr.expr = Boolean.mk_implies ctx (Z3Array.mk_select ctx q_arr x) (Z3Array.mk_select ctx q_arr y) in
+	let q: Quantifier.quantifier = Quantifier.mk_forall_const ctx [q_arr] imp (Some 1) [] [] None None in
+	let to_prove: Expr.expr = Boolean.mk_implies ctx (Quantifier.expr_of_quantifier q) (Boolean.mk_eq ctx x y) in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [to_prove];
+	print_check solver;
+	print_model solver;
+	print_proof solver
+
+
 let _ = 
-	let cfg = [("model", "true")] in
+	let cfg = [("model", "true"); ("proof", "true")] in
 	let ctx = (mk_context cfg) in
-	test6 ctx
+	test10 ctx
 ;;

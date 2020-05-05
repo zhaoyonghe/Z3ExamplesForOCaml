@@ -7,7 +7,7 @@ example:
 .PHONY: clean
 clean:
 	rm -f ml_example ml_example.cm* *.log
-	rm -f aa aa.cm* *.log
+	rm -f aa aa.cm* *.log *.o
 
 .PHONY: run
 run:
