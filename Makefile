@@ -1,4 +1,4 @@
-Z3_SRC_ROOT = ./z3
+Z3_SRC_ROOT = ../z3
 
 default:
 	ocamlfind ocamlopt -o aa -package zarith -I $(Z3_SRC_ROOT)/build/api/ml \
