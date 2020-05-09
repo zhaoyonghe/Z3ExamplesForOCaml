@@ -224,13 +224,12 @@ let test8 (ctx: context): unit =
 		Quantifier.expr_of_quantifier q
 	]
 
-
 (*
 	m, m1 = Array('m', Z, Z), Array('m1', Z, Z)
 	def memset(lo, hi, y, m):
 		return Lambda([x], If(And(lo <= x, x <= hi), y, Select(m, x)))
 	solve([m1 == memset(1, 700, z, m), Select(m1, 6) != z])
-
+*)
 let test9 (ctx: context): unit =
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
 	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
@@ -238,6 +237,7 @@ let test9 (ctx: context): unit =
 	let one: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 1 in
 	let sevenhundred: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 700 in
 	let six: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 6 in
+	(* let eighthundred: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 800 in *)
 	let m: Expr.expr = Z3Array.mk_const_s ctx "m" int_sort int_sort in
 	let m1: Expr.expr = Z3Array.mk_const_s ctx "m1" int_sort int_sort in
 	let memset (lo: Expr.expr) (hi: Expr.expr) (y: Expr.expr) (m: Expr.expr): Expr.expr = 
@@ -245,13 +245,17 @@ let test9 (ctx: context): unit =
 		let q = Quantifier.mk_lambda_const ctx [x] (Boolean.mk_ite ctx p y (Z3Array.mk_select ctx m x)) in
 		Quantifier.expr_of_quantifier q
 	in
+	(* m1 == memset(1, 700, z, m) *)
 	let temp1: Expr.expr = Boolean.mk_eq ctx m1 (memset one sevenhundred z m) in
+	(* Select(m1, 6) != z *)
 	let temp2: Expr.expr = Boolean.mk_not ctx (Boolean.mk_eq ctx (Z3Array.mk_select ctx m1 six) z) in
+	(* if we change 6 to 800, then satisfiable *)
+	(* let temp2: Expr.expr = Boolean.mk_not ctx (Boolean.mk_eq ctx (Z3Array.mk_select ctx m1 eighthundred) z) in *)
 	let solver = (mk_solver ctx None) in
-	Solver.add solver [temp1; temp2];
+	Solver.add solver [temp1; temp2]; (* unsatifiable *)
 	print_check solver;
 	print_model solver
-*)
+
 
 (*
 	Q = Array('Q', Z, B)
@@ -462,5 +466,5 @@ let test18 (ctx: context): unit = ()(*
 let _ = 
 	let cfg = [("model", "true"); ("proof", "true")] in
 	let ctx = (mk_context cfg) in
-	test16 ctx
+	test9 ctx
 ;;
