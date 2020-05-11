@@ -17,9 +17,11 @@ open Z3.Arithmetic.Real
 open Z3.BitVector
 open Z3.Quantifier
 open Z3.FloatingPoint
+open Z3.Datatype
+open Z3.Seq
 
-let print_check (solver: Solver.solver): unit =
-	Printf.printf "%s\n" (string_of_status (Solver.check solver []))
+let print_check (solver: Solver.solver) (l: Expr.expr list): unit =
+	Printf.printf "%s\n" (string_of_status (Solver.check solver l))
 
 let print_model (solver: Solver.solver): unit = 
 	try
@@ -42,13 +44,13 @@ let print_proof (solver: Solver.solver): unit =
 let solve (ctx: context) (assertions: Expr.expr list): unit =
 	let solver = (mk_solver ctx None) in
 	Solver.add solver assertions;
-	print_check solver;
+	print_check solver [];
 	print_model solver
 
 let prove (ctx: context) (assertions: Expr.expr list): unit =
 	let solver = (mk_solver ctx None) in
 	Solver.add solver assertions;
-	print_check solver;
+	print_check solver [];
 	print_model solver;
 	print_proof solver
 
@@ -253,7 +255,7 @@ let test9 (ctx: context): unit =
 	(* let temp2: Expr.expr = Boolean.mk_not ctx (Boolean.mk_eq ctx (Z3Array.mk_select ctx m1 eighthundred) z) in *)
 	let solver = (mk_solver ctx None) in
 	Solver.add solver [temp1; temp2]; (* unsatifiable *)
-	print_check solver;
+	print_check solver [];
 	print_model solver
 
 
@@ -270,11 +272,7 @@ let test10 (ctx: context): unit =
 	let imp: Expr.expr = Boolean.mk_implies ctx (Z3Array.mk_select ctx q_arr x) (Z3Array.mk_select ctx q_arr y) in
 	let q: Quantifier.quantifier = Quantifier.mk_forall_const ctx [q_arr] imp (Some 1) [] [] None None in
 	let to_prove: Expr.expr = Boolean.mk_implies ctx (Quantifier.expr_of_quantifier q) (Boolean.mk_eq ctx x y) in
-	let solver = (mk_solver ctx None) in
-	Solver.add solver [to_prove];
-	print_check solver;
-	print_model solver;
-	print_proof solver
+	prove ctx [to_prove]
 
 (*
 	S = DeclareSort('S')
@@ -432,25 +430,30 @@ let test16 (ctx: context): unit =
 		]
 	in
 	let x: Expr.expr = BitVector.mk_const_s ctx "x" 4 in 
-	let solver = (mk_solver ctx None) in
-	Solver.add solver [
+	prove ctx [
 		Boolean.mk_not ctx (Boolean.mk_eq ctx (is_power_of_two x) (Boolean.mk_or ctx [
 																				Boolean.mk_eq ctx x one;
 																				Boolean.mk_eq ctx x two;
 																				Boolean.mk_eq ctx x four;
 																				Boolean.mk_eq ctx x eight
 																			]))
-	];
-	print_check solver;
-	print_model solver;
-	print_proof solver
+	]
 
 (*
 	v = BitVec('v',32)
 	mask = v >> 31
 	prove(If(v > 0, v, -v) == (v + mask) ^ mask)
 *)
-let test17 (ctx: context): unit = ()
+let test17 (ctx: context): unit =
+	let zero: Expr.expr = Expr.mk_numeral_int ctx 0 (BitVector.mk_sort ctx 32) in
+	let thirtyone: Expr.expr = Expr.mk_numeral_int ctx 31 (BitVector.mk_sort ctx 32) in
+	let v: Expr.expr = BitVector.mk_const_s ctx "v" 32 in
+	let mask: Expr.expr = BitVector.mk_ashr ctx v thirtyone in
+	(* If(v > 0, v, -v) *)
+	let temp1: Expr.expr = Boolean.mk_ite ctx (BitVector.mk_sgt ctx v zero) v (BitVector.mk_neg ctx v) in
+	(* (v + mask) ^ mask <==> v ^ mask ^ mask *)
+	let temp2: Expr.expr = BitVector.mk_xor ctx (BitVector.mk_add ctx v mask) mask in
+	prove ctx [Boolean.mk_eq ctx temp1 temp2]
 
 (*
 	x = FP('x', FPSort(3, 4))
@@ -463,8 +466,201 @@ let test18 (ctx: context): unit = ()(*
 	let temp: Expr.expr = FloatingPoint.mk_add ctx (FloatingPoint.RoundingMode.mk_rtz ctx) x ten in
 	Printf.printf "%s\n" (FloatingPoint.numeral_to_string temp)*)
 
+(*
+	Tree = Datatype('Tree')
+	Tree.declare('Empty')
+	Tree.declare('Node', ('left', Tree), ('data', Z), ('right', Tree))
+	Tree = Tree.create()
+	t = Const('t', Tree)
+	solve(t != Tree.Empty)
+	prove(t != Tree.Node(t, 0, t))
+*)
+let test19 (ctx: context): unit = ()
+(*
+	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
+	let tree_sym: Symbol.symbol = Symbol.mk_string ctx "Tree" in
+	let tree_sort: Sort.sort = Datatype.mk_sort ctx tree_sym [] in
+	let left_sym: Symbol.symbol = Symbol.mk_string ctx "left" in
+	let right_sym: Symbol.symbol = Symbol.mk_string ctx "right" in
+	let data_sym: Symbol.symbol = Symbol.mk_string ctx "data" in
+	let empty: Constructor.constructor = 
+	Datatype.mk_constructor ctx tree_sym (Symbol.mk_string ctx "Empty") [] [] [] in
+	let node: Constructor.constructor = 
+	Datatype.mk_constructor ctx tree_sym (Symbol.mk_string ctx "Node") 
+	[left_sym; right_sym; data_sym] 
+	[Some tree_sort; Some int_sort; Some tree_sort] 
+	[0; 0; 0]
+	in
+	Printf.printf "%s\n" (FuncDecl.to_string (List.hd (Datatype.get_constructors tree_sort)))
+*)
+
+(*
+	s, t, u = Strings('s t u')
+	prove(Implies(And(PrefixOf(s, t), SuffixOf(u, t), 
+								Length(t) == Length(s) + Length(u)), 
+								t == Concat(s, u)))
+*)
+let test20 (ctx: context): unit = 
+	let string_sort: Sort.sort = Seq.mk_string_sort ctx in
+	let s: Expr.expr = Expr.mk_const_s ctx "s" string_sort in
+	let t: Expr.expr = Expr.mk_const_s ctx "t" string_sort in
+	let u: Expr.expr = Expr.mk_const_s ctx "u" string_sort in
+	let s_len: Expr.expr = Seq.mk_seq_length ctx s in
+	let t_len: Expr.expr = Seq.mk_seq_length ctx t in
+	let u_len: Expr.expr = Seq.mk_seq_length ctx u in
+	(* And(PrefixOf(s, t), SuffixOf(u, t), Length(t) == Length(s) + Length(u)) *)
+	let implies_l: Expr.expr = Boolean.mk_and ctx [
+		Seq.mk_seq_prefix ctx s t;
+		Seq.mk_seq_suffix ctx u t;
+		Boolean.mk_eq ctx t_len (Arithmetic.mk_add ctx [s_len; u_len])
+	] in
+	(* t == Concat(s, u) *)
+	let implies_r: Expr.expr = Boolean.mk_eq ctx t (Seq.mk_seq_concat ctx [s; u]) in
+	(*
+	this is unsatisfiable:
+	proof ctx [Boolean.mk_not ctx (Boolean.mk_iff ctx implies_l implies_r)];
+	*)
+	prove ctx [Boolean.mk_implies ctx implies_l implies_r]
+
+(*
+	s, t = Consts('s t', SeqSort(IntSort()))
+	solve(Concat(s, Unit(IntVal(2))) == Concat(Unit(IntVal(1)), t))
+	prove(Concat(s, Unit(IntVal(2))) != Concat(Unit(IntVal(1)), s))
+*)
+let test21 (ctx: context): unit =
+	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in 
+	let element_sort: Sort.sort = Seq.mk_seq_sort ctx int_sort in
+	let s: Expr.expr = Expr.mk_const_s ctx "s" element_sort in
+	let t: Expr.expr = Expr.mk_const_s ctx "t" element_sort in
+	let one: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 1 in
+	let two: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 2 in
+	(* Concat(s, Unit(IntVal(2))) *)
+	let temp1: Expr.expr = Seq.mk_seq_concat ctx [s; Seq.mk_seq_unit ctx two] in
+	(* Concat(Unit(IntVal(1)), t) *)
+	let temp2: Expr.expr = Seq.mk_seq_concat ctx [Seq.mk_seq_unit ctx one; t] in
+	(* Concat(Unit(IntVal(1)), s) *)
+	let temp3: Expr.expr = Seq.mk_seq_concat ctx [Seq.mk_seq_unit ctx one; s] in
+	solve ctx [Boolean.mk_eq ctx temp1 temp2];
+	prove ctx [mk_neq ctx temp1 temp3]
+
+(*
+	s = Solver()
+	A = DeclareSort()
+	R = Function('R', A, A, B)
+	x, y, z = Consts('x y z', A)
+
+	# R = PartialOrder(A, 0)
+	s.Add(ForAll([x], R(x, x)))  
+	s.Add(ForAll([x,y], Implies(And(R(x, y), R(y, x)), x == y)))
+	s.Add(ForAll([x,y,z], Implies(And(R(x, y), R(y, z)), R(x, z))))
+	
+	# R = TotalLinearOrder(A, 0)
+	s.Add(ForAll([x], R(x, x)))  
+	s.Add(ForAll([x,y], Implies(And(R(x, y), R(y, x)), x == y)))
+	s.Add(ForAll([x,y,z], Implies(And(R(x, y), R(y, z)), R(x, z))))
+	s.Add(ForAll([x,y], Or(R(x, y), R(y, x))))
+
+	# R = TreeOrder(A, 0)
+	s.Add(ForAll([x], R(x, x)))  
+	s.Add(ForAll([x,y], Implies(And(R(x, y), R(y, x)), x == y)))
+	s.Add(ForAll([x,y,z], Implies(And(R(x, y), R(y, z)), R(x, z))))
+	s.Add(ForAll([x,y,z], Implies(And(R(x, y), R(x, z)), Or(R(y, z), R(z, y)))))
+
+	# R = PiecewiseLinearOrder(A, 0)
+	s.Add(ForAll([x], R(x, x)))  
+	s.Add(ForAll([x,y], Implies(And(R(x, y), R(y, x)), x == y)))
+	s.Add(ForAll([x,y,z], Implies(And(R(x, y), R(y, z)), R(x, z))))
+	s.Add(ForAll([x,y,z], Implies(And(R(x, y), R(x, z)), Or(R(y, z), R(z, y)))))
+	s.Add(ForAll([x,y,z], Implies(And(R(y, x), R(z, x)), Or(R(y, z), R(z, y)))))
+
+	# No same support in OCaml bindings
+*)
+let test22 (ctx: context): unit = ()
+
+(*
+	R = Function('R', A, A, B)
+	TC_R = TransitiveClosure(R)
+	TRC_R = TransitiveReflexiveClosure(R)
+	s = Solver()
+	a, b, c = Consts('a b c', A)
+	s.add(R(a, b))
+	s.add(R(b, c))
+	s.add(Not(TC_R(a, c)))
+	print(s.check())   # produces unsat
+
+	# No same support in OCaml bindings
+*)
+let test23 (ctx: context): unit = ()
+
+(*
+	p, q, r = Bools('p q r')
+	s = Solver()
+	s.add(Implies(p, q))
+	s.add(Not(q))
+	print(s.check())
+	s.push()
+	s.add(p)
+	print(s.check())
+	s.pop()
+	print(s.check())
+*)
+let test24 (ctx: context): unit = 
+	let p: Expr.expr = Boolean.mk_const_s ctx "p" in
+	let q: Expr.expr = Boolean.mk_const_s ctx "q" in
+	let r: Expr.expr = Boolean.mk_const_s ctx "r" in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [Boolean.mk_implies ctx p q];
+	(* inside the solver: [p->q] *)
+	Solver.add solver [Boolean.mk_not ctx q];
+	(* inside the solver: [p->q; q] *)
+	print_check solver []; (* satisfiable *)
+	Solver.push solver;
+	(* inside the solver: [p->q; q; ()] *)
+	Solver.add solver [p];
+	(* inside the solver: [p->q; q; (); p] *)
+	print_check solver []; (* unsatisfiable *)
+	(*
+	Solver.push solver;
+	(* inside the solver: [p->q; q; (); p; ()] *)
+	Solver.add solver [p];
+	(* inside the solver: [p->q; q; (); p; (); p] *)
+	print_check solver []; (* unsatisfiable *)
+	Solver.pop solver 1; (* Backtracks one backtracking point. *)
+	(* only pop one, inside the solver: [p->q; q; (); p] *)
+	(* if pop two, inside the solver: [p->q; q] *)
+	print_check solver []; (* unsatisfiable *)
+	*)
+	Solver.pop solver 1; (* Backtracks one backtracking point. *)
+	(* inside the solver: [p->q; q] *)
+	print_check solver [] (* satisfiable *)
+
+
+(*
+	p, q = Bools('p q')
+	s = Solver()
+
+	s.add(Implies(p, q))
+	s.add(Not(q))
+	print(s.check(p))
+
+	s.add(Not(q))
+	s.assert_and_track(q, p)
+	print(s.check())
+*)
+let test25 (ctx: context): unit = 
+	let p: Expr.expr = Boolean.mk_const_s ctx "p" in
+	let q: Expr.expr = Boolean.mk_const_s ctx "q" in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [Boolean.mk_implies ctx p q];
+	Solver.add solver [Boolean.mk_not ctx q];
+	print_check solver [p]; (* unsatisfiable *)
+	Solver.reset solver;
+	Solver.add solver [Boolean.mk_not ctx q];
+	Solver.assert_and_track solver q p;
+	print_check solver [] (* unsatisfiable *)
+
 let _ = 
 	let cfg = [("model", "true"); ("proof", "true")] in
 	let ctx = (mk_context cfg) in
-	test9 ctx
+	test25 ctx
 ;;
