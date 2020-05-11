@@ -22,7 +22,7 @@ $ make -j3
 Then change the `Z3_SRC_ROOT` in `Makefile` to the root directory of the downloaded z3 folder so that the z3 library can be found. 
 For example:
 ```
-Z3_SRC_ROOT = ./z3
+Z3_SRC_ROOT = ../z3
 ```
 ## A quick start
 To rebuild my example code:
