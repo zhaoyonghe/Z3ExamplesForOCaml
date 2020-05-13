@@ -24,13 +24,10 @@ let print_check (solver: Solver.solver) (l: Expr.expr list): unit =
 	Printf.printf "%s\n" (string_of_status (Solver.check solver l))
 
 let print_model (solver: Solver.solver): unit = 
-	try
-		match (Solver.get_model solver) with
-		| Some m -> Printf.printf "%s\n" (Model.to_string m)
-		| None -> Printf.printf "no model\n"		
-	with
-	| _ -> Printf.printf "no model\n"
-	(* It should return None, but actually raises error. *)
+	match (Solver.get_model solver) with
+	| Some m -> Printf.printf "%s\n" (Model.to_string m)
+	| None -> Printf.printf "no model\n"		
+
 
 let print_proof (solver: Solver.solver): unit = 
 	try
@@ -39,7 +36,8 @@ let print_proof (solver: Solver.solver): unit =
 		| None -> Printf.printf "no proof\n"		
 	with
 	| _ -> Printf.printf "no proof\n"
-	(* It should return None, but actually raises error. *)
+		
+
 
 let solve (ctx: context) (assertions: Expr.expr list): unit =
 	let solver = (mk_solver ctx None) in
@@ -473,26 +471,41 @@ let test18 (ctx: context): unit = ()(*
 	Tree = Tree.create()
 	t = Const('t', Tree)
 	solve(t != Tree.Empty)
+
 	prove(t != Tree.Node(t, 0, t))
 *)
-let test19 (ctx: context): unit = ()
 (*
+let create (ctx:context) 
+	(name:Symbol.symbol) 
+	(recognizer:Symbol.symbol) 
+	(field_names:Symbol.symbol list) 
+	(sorts:Sort.sort option list) 
+	(sort_refs:int list)
+https://github.com/Z3Prover/z3/issues/4264
+*)
+let test19 (ctx: context): unit = 
+	let zero: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 0 in
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
 	let tree_sym: Symbol.symbol = Symbol.mk_string ctx "Tree" in
-	let tree_sort: Sort.sort = Datatype.mk_sort ctx tree_sym [] in
 	let left_sym: Symbol.symbol = Symbol.mk_string ctx "left" in
 	let right_sym: Symbol.symbol = Symbol.mk_string ctx "right" in
 	let data_sym: Symbol.symbol = Symbol.mk_string ctx "data" in
 	let empty: Constructor.constructor = 
-	Datatype.mk_constructor ctx tree_sym (Symbol.mk_string ctx "Empty") [] [] [] in
-	let node: Constructor.constructor = 
-	Datatype.mk_constructor ctx tree_sym (Symbol.mk_string ctx "Node") 
-	[left_sym; right_sym; data_sym] 
-	[Some tree_sort; Some int_sort; Some tree_sort] 
-	[0; 0; 0]
+	Datatype.mk_constructor ctx tree_sym (Symbol.mk_string ctx "is-empty") [] [] [] and
+	node: Constructor.constructor = 
+	Datatype.mk_constructor ctx tree_sym (Symbol.mk_string ctx "is-node") 
+	[left_sym; data_sym; right_sym] [None; Some int_sort; None] [0; -1; 0] 
 	in
-	Printf.printf "%s\n" (FuncDecl.to_string (List.hd (Datatype.get_constructors tree_sort)))
-*)
+	let tree_sort: Sort.sort = Datatype.mk_sort_s ctx "tree_sort" [empty; node] in
+	let t: Expr.expr = Expr.mk_const_s ctx "t" tree_sort in
+	let cons: FuncDecl.func_decl list = Datatype.get_constructors tree_sort in
+	let empty_cons: FuncDecl.func_decl = List.nth cons 0 in
+	let node_cons: FuncDecl.func_decl = List.nth cons 1 in
+	List.iter (fun a -> Printf.printf "%s\n" (FuncDecl.to_string a)) (Datatype.get_constructors tree_sort);
+	solve ctx [mk_neq ctx t (FuncDecl.apply empty_cons [])];
+	prove ctx [mk_neq ctx t (FuncDecl.apply node_cons [t; zero; t])]
+	(* prove ctx [Boolean.mk_eq ctx t (FuncDecl.apply node_cons [t; zero; t])] unsatisfiable *)
+
 
 (*
 	s, t, u = Strings('s t u')
@@ -644,7 +657,7 @@ let test24 (ctx: context): unit =
 	print(s.check(p))
 
 	s.add(Not(q))
-	s.assert_and_track(q, p)
+	s.assert_and_track(q, p) # p -> q; p
 	print(s.check())
 *)
 let test25 (ctx: context): unit = 
@@ -659,8 +672,111 @@ let test25 (ctx: context): unit =
 	Solver.assert_and_track solver q p;
 	print_check solver [] (* unsatisfiable *)
 
+(*
+	p, q, r, v = Bools('p q r v')
+	s = Solver()
+	s.add(Not(q))
+	s.assert_and_track(q, p)
+	s.assert_and_track(r, v)
+	print(s.check())
+	print(s.unsat_core()) # the core is only available after check
+*)
+let test26 (ctx: context): unit =
+	let p: Expr.expr = Boolean.mk_const_s ctx "p" in
+	let q: Expr.expr = Boolean.mk_const_s ctx "q" in
+	let r: Expr.expr = Boolean.mk_const_s ctx "r" in
+	let v: Expr.expr = Boolean.mk_const_s ctx "v" in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [Boolean.mk_not ctx q];
+	Solver.assert_and_track solver q p;
+	Solver.assert_and_track solver r v;
+	print_check solver []; (* unsatisfiable *)
+	List.iter (fun a -> Printf.printf "%s\n" (Expr.to_string a)) (Solver.get_unsat_core solver)	(* only p *)
+
+(*
+	By default solvers do not return minimal cores.
+	def set_core_minimize(s):
+		s.set("sat.core.minimize","true")  # For Bit-vector theories
+		s.set("smt.core.minimize","true")  # For general SMT
+*)
+let set_core_minimize (solver: Solver.solver): unit = ()
+
+(*
+	f = Function('f', Z, Z)
+	x, y = Ints('x y')
+	s.add(f(x) > y, f(f(y)) == y)
+	print(s.check())
+	print(s.model())
+
+	m = s.model()
+	for d in m:
+	    print(d, m[d])
+
+	num_entries = m[f].num_entries()
+	for i in range(num_entries):
+	    print(m[f].entry(i))
+	print("else", m[f].else_value())
+
+	print(m.eval(x), m.eval(f(3)), m.eval(f(4)))
+*)
+let test27 (ctx: context): unit =
+	let three: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 3 in
+	let four: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 4 in
+	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
+	let f: FuncDecl.func_decl = FuncDecl.mk_func_decl_s ctx "f" [int_sort] int_sort in
+	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
+	let y: Expr.expr = Arithmetic.Integer.mk_const_s ctx "y" in
+	(* f(x) > y *)
+	let temp1: Expr.expr = Arithmetic.mk_gt ctx (FuncDecl.apply f [x]) y in
+	(* f(f(y)) == y *)
+	let temp2: Expr.expr = Boolean.mk_eq ctx (FuncDecl.apply f [(FuncDecl.apply f [y])]) y in
+	let solver = (mk_solver ctx None) in
+	Solver.add solver [temp1; temp2];
+	print_check solver []; (* satisfiable *)
+	print_model solver;
+
+	let model_completion: bool = false in
+
+	let m: Model.model = 
+	(match (Solver.get_model solver) with
+	| Some m -> m
+	| None -> raise (Failure "no model")) in
+
+	List.iter (fun a -> Printf.printf "decl: %s\n" (FuncDecl.to_string a)) (Model.get_decls m);
+	List.iter (fun a -> Printf.printf "const_decl: %s\n" (FuncDecl.to_string a)) (Model.get_const_decls m);
+	List.iter (fun a -> Printf.printf "func_decl: %s\n" (FuncDecl.to_string a)) (Model.get_func_decls m);
+
+	let f_itp: FuncInterp.func_interp = 
+	(match (Model.get_func_interp m f) with
+	| Some itp -> itp
+	| None -> raise (Failure "no model")) in
+	List.iter 
+	(fun a -> Printf.printf "entry: %s\n" (Model.FuncInterp.FuncEntry.to_string a)) 
+	(Model.FuncInterp.get_entries f_itp);
+	Printf.printf "else: %s\n" (Expr.to_string (Model.FuncInterp.get_else f_itp));
+
+	(* m.eval(x), m.eval(f(3)), m.eval(f(4)) *)
+	let e1: Expr.expr = 
+	(match Model.eval m x model_completion with
+	| Some e -> e
+	| _ -> raise (Failure "cannot eval")) in
+	Printf.printf "m.eval(x): %s\n" (Expr.to_string e1);
+
+	let e2: Expr.expr = 
+	(match Model.eval m (FuncDecl.apply f [three]) model_completion with
+	| Some e -> e
+	| _ -> raise (Failure "cannot eval")) in
+	Printf.printf "m.eval(f(3)): %s\n" (Expr.to_string e2);
+
+	let e3: Expr.expr = 
+	(match Model.eval m (FuncDecl.apply f [four]) model_completion with
+	| Some e -> e
+	| _ -> raise (Failure "cannot eval")) in
+	Printf.printf "m.eval(f(4)): %s\n" (Expr.to_string e3)
+
+
 let _ = 
 	let cfg = [("model", "true"); ("proof", "true")] in
 	let ctx = (mk_context cfg) in
-	test25 ctx
+	test27 ctx
 ;;
