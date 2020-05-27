@@ -1,27 +1,22 @@
-open Z3
-open Z3.Z3Array
-open Z3.Model
-open Z3.Symbol
-open Z3.Sort
-open Z3.Expr
-open Z3.Boolean
-open Z3.FuncDecl
-open Z3.Goal
-open Z3.Tactic
-open Z3.Tactic.ApplyResult
-open Z3.Probe
-open Z3.Solver
-open Z3.Arithmetic
-open Z3.Arithmetic.Integer
-open Z3.Arithmetic.Real
-open Z3.BitVector
-open Z3.Quantifier
-open Z3.FloatingPoint
-open Z3.Datatype
-open Z3.Seq
+
+module Solver = Z3.Solver
+module Expr = Z3.Expr
+module Boolean = Z3.Boolean
+module Symbol = Z3.Symbol
+module Sort = Z3.Sort
+module FuncDecl = Z3.FuncDecl
+module Arithmetic = Z3.Arithmetic
+module BitVector = Z3.BitVector
+module Quantifier = Z3.Quantifier
+module Model = Z3.Model
+module Z3Array = Z3.Z3Array
+module Datatype = Z3.Datatype
+module Constructor = Z3.Datatype.Constructor
+module Seq = Z3.Seq
+module FuncInterp = Z3.Model.FuncInterp
 
 let print_check (solver: Solver.solver) (l: Expr.expr list): unit =
-	Printf.printf "%s\n" (string_of_status (Solver.check solver l))
+	Printf.printf "%s\n" (Solver.string_of_status (Solver.check solver l))
 
 let print_model (solver: Solver.solver): unit = 
 	match (Solver.get_model solver) with
@@ -39,14 +34,14 @@ let print_proof (solver: Solver.solver): unit =
 		
 
 
-let solve (ctx: context) (assertions: Expr.expr list): unit =
-	let solver = (mk_solver ctx None) in
+let solve (ctx: Z3.context) (assertions: Expr.expr list): unit =
+	let solver = (Solver.mk_solver ctx None) in
 	Solver.add solver assertions;
 	print_check solver [];
 	print_model solver
 
-let prove (ctx: context) (assertions: Expr.expr list): unit =
-	let solver = (mk_solver ctx None) in
+let prove (ctx: Z3.context) (assertions: Expr.expr list): unit =
+	let solver = (Solver.mk_solver ctx None) in
 	Solver.add solver assertions;
 	print_check solver [];
 	print_model solver;
@@ -62,7 +57,7 @@ let prove (ctx: context) (assertions: Expr.expr list): unit =
 	print(s.check())
 	print(s.model())
 *)
-let test1 (ctx: context): unit = 
+let test1 (ctx: Z3.context): unit = 
 	let tie: Symbol.symbol = Symbol.mk_string ctx "Tie" in
 	let shirt: Symbol.symbol = Symbol.mk_string ctx "Shirt" in
 	let bool_sort: Sort.sort = Boolean.mk_sort ctx in
@@ -83,7 +78,7 @@ let test1 (ctx: context): unit =
 	fml = Implies(x + 2 == y, f(Store(A, x, 3)[y - 2]) == f(y - x + 1))
 	solve(Not(fml))
 *)
-let test2 (ctx: context): unit =
+let test2 (ctx: Z3.context): unit =
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
 	let f: FuncDecl.func_decl = FuncDecl.mk_func_decl_s ctx "f" [int_sort] int_sort in
 	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
@@ -112,7 +107,7 @@ let test2 (ctx: context): unit =
 	s.add((x % 4) + 3 * (y / 2) > x - y)
 	print(s.sexpr())
 *)
-let test3 (ctx: context): unit =
+let test3 (ctx: Z3.context): unit =
 	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
 	let y: Expr.expr = Arithmetic.Integer.mk_const_s ctx "y" in
 	let two: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 2 in
@@ -124,7 +119,7 @@ let test3 (ctx: context): unit =
 	let temp2: Expr.expr = Arithmetic.mk_mul ctx [three; (Arithmetic.mk_div ctx y two)] in
 	(* x - y *)
 	let temp3: Expr.expr = Arithmetic.mk_sub ctx [x; y] in
-	let solver = (mk_solver ctx None) in
+	let solver = (Solver.mk_solver ctx None) in
 	Solver.add solver [Arithmetic.mk_gt ctx (Arithmetic.mk_add ctx [temp1; temp2]) temp3];
 	Printf.printf "%s\n" (Solver.to_string solver)
 
@@ -133,7 +128,7 @@ let test3 (ctx: context): unit =
 	s = Const('s', S)
 	solve(ForAll(s, s != s))
 *)
-let test4 (ctx: context): unit =
+let test4 (ctx: Z3.context): unit =
 	let s_sort: Sort.sort = Sort.mk_uninterpreted_s ctx "S" in
 	let s: Expr.expr = Expr.mk_const_s ctx "s" s_sort in
 	let q: Quantifier.quantifier = 
@@ -150,7 +145,7 @@ let test4 (ctx: context): unit =
 	a = Bool('a')
 	solve(g(1+f(a)))
 *)
-let test5 (ctx: context): unit =
+let test5 (ctx: Z3.context): unit =
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
 	let bool_sort: Sort.sort = Boolean.mk_sort ctx in
 	let f: FuncDecl.func_decl = FuncDecl.mk_func_decl_s ctx "f" [bool_sort] int_sort in
@@ -171,7 +166,7 @@ let test5 (ctx: context): unit =
 	print("operator: ", n.decl())
 	print("op name:  ", n.decl().name())
 *)
-let test6 (ctx: context): unit =
+let test6 (ctx: Z3.context): unit =
 	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
 	let y: Expr.expr = Arithmetic.Integer.mk_const_s ctx "y" in
 	let three: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 3 in
@@ -190,7 +185,7 @@ let test6 (ctx: context): unit =
 	solve([y == x + 1, ForAll([z], Implies(z <= 0, x < z))])
 	unsatisfiable
 *)
-let test7 (ctx: context): unit =
+let test7 (ctx: Z3.context): unit =
 	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
 	let y: Expr.expr = Arithmetic.Integer.mk_const_s ctx "y" in	
 	let zero: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 0 in
@@ -210,7 +205,7 @@ let test7 (ctx: context): unit =
 	solve([y == x + 1, ForAll([z], Implies(z <= 0, x > z))])
 	unsatisfiable
 *)
-let test8 (ctx: context): unit =
+let test8 (ctx: Z3.context): unit =
 	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
 	let y: Expr.expr = Arithmetic.Integer.mk_const_s ctx "y" in	
 	let zero: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 0 in
@@ -230,7 +225,7 @@ let test8 (ctx: context): unit =
 		return Lambda([x], If(And(lo <= x, x <= hi), y, Select(m, x)))
 	solve([m1 == memset(1, 700, z, m), Select(m1, 6) != z])
 *)
-let test9 (ctx: context): unit =
+let test9 (ctx: Z3.context): unit =
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
 	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
 	let z: Expr.expr = Arithmetic.Integer.mk_const_s ctx "z" in
@@ -251,7 +246,7 @@ let test9 (ctx: context): unit =
 	let temp2: Expr.expr = Boolean.mk_not ctx (Boolean.mk_eq ctx (Z3Array.mk_select ctx m1 six) z) in
 	(* if we change 6 to 800, then satisfiable *)
 	(* let temp2: Expr.expr = Boolean.mk_not ctx (Boolean.mk_eq ctx (Z3Array.mk_select ctx m1 eighthundred) z) in *)
-	let solver = (mk_solver ctx None) in
+	let solver = (Solver.mk_solver ctx None) in
 	Solver.add solver [temp1; temp2]; (* unsatifiable *)
 	print_check solver [];
 	print_model solver
@@ -261,7 +256,7 @@ let test9 (ctx: context): unit =
 	Q = Array('Q', Z, B)
 	prove(Implies(ForAll(Q, Implies(Select(Q, x), Select(Q, y))), x == y))
 *)
-let test10 (ctx: context): unit =
+let test10 (ctx: Z3.context): unit =
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
 	let bool_sort: Sort.sort = Boolean.mk_sort ctx in
 	let q_arr: Expr.expr = Z3Array.mk_const_s ctx "Q" int_sort bool_sort in
@@ -279,7 +274,7 @@ let test10 (ctx: context): unit =
 	solve(f(f(x)) == x, f(f(f(x))) == x)
 	solve(f(f(x)) == x, f(f(f(x))) == x, f(x) != x)
 *)
-let test11 (ctx: context): unit =
+let test11 (ctx: Z3.context): unit =
 	let s_sort: Sort.sort = Sort.mk_uninterpreted_s ctx "S" in
 	let f_func: FuncDecl.func_decl = FuncDecl.mk_func_decl_s ctx "f" [s_sort] s_sort in
 	let x: Expr.expr = Expr.mk_const_s ctx "x" s_sort in
@@ -295,10 +290,10 @@ let test11 (ctx: context): unit =
 	]
 
 
-let mk_neq (ctx: context) (a: Expr.expr) (b: Expr.expr): Expr.expr = 
+let mk_neq (ctx: Z3.context) (a: Expr.expr) (b: Expr.expr): Expr.expr = 
 	Boolean.mk_not ctx (Boolean.mk_eq ctx a b)
 
-let reals (ctx: context) (s_li: string list): Expr.expr list = 
+let reals (ctx: Z3.context) (s_li: string list): Expr.expr list = 
 	List.map (fun a -> Arithmetic.Real.mk_const_s ctx a) s_li
 
 (*
@@ -308,7 +303,7 @@ let reals (ctx: context) (s_li: string list): Expr.expr list =
 	g = Function('g', S, S)
 	solve([a == b, b == c, d == e, b == s, d == t, f(a, g(d)) != f(g(e), b)])
 *)
-let test12 (ctx: context): unit =
+let test12 (ctx: Z3.context): unit =
 	let s_sort: Sort.sort = Sort.mk_uninterpreted_s ctx "S" in
 	let a: Expr.expr = Expr.mk_const_s ctx "a" s_sort in
 	let b: Expr.expr = Expr.mk_const_s ctx "b" s_sort in
@@ -334,7 +329,7 @@ let test12 (ctx: context): unit =
 	x, y = Reals('x y')
 	solve([x >= 0, Or(x + y <= 2, x + 2*y >= 6), Or(x + y >= 2, x + 2*y > 4)])
 *)
-let test13 (ctx: context): unit =
+let test13 (ctx: Z3.context): unit =
 	let zero: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 0 in
 	let two: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 2 in
 	let four: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 4 in
@@ -354,7 +349,7 @@ let test13 (ctx: context): unit =
 	A = Array('A', IntSort(), IntSort())
 	solve(A[x] == x, Store(A, x, y) == A)
 *)
-let test14 (ctx: context): unit =
+let test14 (ctx: Z3.context): unit =
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
 	let x: Expr.expr = Arithmetic.Integer.mk_const_s ctx "x" in
 	let y: Expr.expr = Arithmetic.Integer.mk_const_s ctx "y" in
@@ -375,7 +370,7 @@ let test14 (ctx: context): unit =
 	s.add(Implies(ForAll(i, a[i] == b[i]), a == b))
 	s.add(Implies(a[Ext(a, b)] == b[Ext(a, b)], a == b))
 *)
-let test15 (ctx: context): unit = 
+let test15 (ctx: Z3.context): unit = 
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
 	let i: Expr.expr = Arithmetic.Integer.mk_const_s ctx "i" in
 	let j: Expr.expr = Arithmetic.Integer.mk_const_s ctx "j" in
@@ -415,7 +410,7 @@ let test15 (ctx: context): unit =
 	x = BitVec('x', 4)
 	prove(is_power_of_two(x) == Or([x == 2**i for i in range(4)]))
 *)
-let test16 (ctx: context): unit =
+let test16 (ctx: Z3.context): unit =
 	let zero: Expr.expr = Expr.mk_numeral_int ctx 0 (BitVector.mk_sort ctx 4) in
 	let one: Expr.expr = Expr.mk_numeral_int ctx 1 (BitVector.mk_sort ctx 4) in
 	let two: Expr.expr = Expr.mk_numeral_int ctx 2 (BitVector.mk_sort ctx 4) in
@@ -442,7 +437,7 @@ let test16 (ctx: context): unit =
 	mask = v >> 31
 	prove(If(v > 0, v, -v) == (v + mask) ^ mask)
 *)
-let test17 (ctx: context): unit =
+let test17 (ctx: Z3.context): unit =
 	let zero: Expr.expr = Expr.mk_numeral_int ctx 0 (BitVector.mk_sort ctx 32) in
 	let thirtyone: Expr.expr = Expr.mk_numeral_int ctx 31 (BitVector.mk_sort ctx 32) in
 	let v: Expr.expr = BitVector.mk_const_s ctx "v" 32 in
@@ -457,7 +452,7 @@ let test17 (ctx: context): unit =
 	x = FP('x', FPSort(3, 4))
 	print(10 + x)
 *)
-let test18 (ctx: context): unit = ()(*
+let test18 (ctx: Z3.context): unit = ()(*
 	let fp_sort: Sort.sort = FloatingPoint.mk_sort ctx 3 4 in
 	let x: Expr.expr = FloatingPoint.mk_const_s ctx "x" fp_sort in
 	let ten: Expr.expr = FloatingPoint.mk_numeral_f ctx 10. fp_sort in
@@ -475,15 +470,15 @@ let test18 (ctx: context): unit = ()(*
 	prove(t != Tree.Node(t, 0, t))
 *)
 (*
-let create (ctx:context) 
-	(name:Symbol.symbol) 
-	(recognizer:Symbol.symbol) 
-	(field_names:Symbol.symbol list) 
-	(sorts:Sort.sort option list) 
-	(sort_refs:int list)
-https://github.com/Z3Prover/z3/issues/4264
+	let create (ctx:context) 
+		(name:Symbol.symbol) 
+		(recognizer:Symbol.symbol) 
+		(field_names:Symbol.symbol list) 
+		(sorts:Sort.sort option list) 
+		(sort_refs:int list)
+	https://github.com/Z3Prover/z3/issues/4264
 *)
-let test19 (ctx: context): unit = 
+let test19 (ctx: Z3.context): unit = 
 	let zero: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 0 in
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
 	let tree_sym: Symbol.symbol = Symbol.mk_string ctx "Tree" in
@@ -513,7 +508,7 @@ let test19 (ctx: context): unit =
 								Length(t) == Length(s) + Length(u)), 
 								t == Concat(s, u)))
 *)
-let test20 (ctx: context): unit = 
+let test20 (ctx: Z3.context): unit = 
 	let string_sort: Sort.sort = Seq.mk_string_sort ctx in
 	let s: Expr.expr = Expr.mk_const_s ctx "s" string_sort in
 	let t: Expr.expr = Expr.mk_const_s ctx "t" string_sort in
@@ -540,7 +535,7 @@ let test20 (ctx: context): unit =
 	solve(Concat(s, Unit(IntVal(2))) == Concat(Unit(IntVal(1)), t))
 	prove(Concat(s, Unit(IntVal(2))) != Concat(Unit(IntVal(1)), s))
 *)
-let test21 (ctx: context): unit =
+let test21 (ctx: Z3.context): unit =
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in 
 	let element_sort: Sort.sort = Seq.mk_seq_sort ctx int_sort in
 	let s: Expr.expr = Expr.mk_const_s ctx "s" element_sort in
@@ -588,7 +583,7 @@ let test21 (ctx: context): unit =
 
 	# No same support in OCaml bindings
 *)
-let test22 (ctx: context): unit = ()
+let test22 (ctx: Z3.context): unit = ()
 
 (*
 	R = Function('R', A, A, B)
@@ -603,7 +598,7 @@ let test22 (ctx: context): unit = ()
 
 	# No same support in OCaml bindings
 *)
-let test23 (ctx: context): unit = ()
+let test23 (ctx: Z3.context): unit = ()
 
 (*
 	p, q, r = Bools('p q r')
@@ -617,11 +612,11 @@ let test23 (ctx: context): unit = ()
 	s.pop()
 	print(s.check())
 *)
-let test24 (ctx: context): unit = 
+let test24 (ctx: Z3.context): unit = 
 	let p: Expr.expr = Boolean.mk_const_s ctx "p" in
 	let q: Expr.expr = Boolean.mk_const_s ctx "q" in
 	let r: Expr.expr = Boolean.mk_const_s ctx "r" in
-	let solver = (mk_solver ctx None) in
+	let solver = (Solver.mk_solver ctx None) in
 	Solver.add solver [Boolean.mk_implies ctx p q];
 	(* inside the solver: [p->q] *)
 	Solver.add solver [Boolean.mk_not ctx q];
@@ -660,10 +655,10 @@ let test24 (ctx: context): unit =
 	s.assert_and_track(q, p) # p -> q; p
 	print(s.check())
 *)
-let test25 (ctx: context): unit = 
+let test25 (ctx: Z3.context): unit = 
 	let p: Expr.expr = Boolean.mk_const_s ctx "p" in
 	let q: Expr.expr = Boolean.mk_const_s ctx "q" in
-	let solver = (mk_solver ctx None) in
+	let solver = (Solver.mk_solver ctx None) in
 	Solver.add solver [Boolean.mk_implies ctx p q];
 	Solver.add solver [Boolean.mk_not ctx q];
 	print_check solver [p]; (* unsatisfiable *)
@@ -681,12 +676,12 @@ let test25 (ctx: context): unit =
 	print(s.check())
 	print(s.unsat_core()) # the core is only available after check
 *)
-let test26 (ctx: context): unit =
+let test26 (ctx: Z3.context): unit =
 	let p: Expr.expr = Boolean.mk_const_s ctx "p" in
 	let q: Expr.expr = Boolean.mk_const_s ctx "q" in
 	let r: Expr.expr = Boolean.mk_const_s ctx "r" in
 	let v: Expr.expr = Boolean.mk_const_s ctx "v" in
-	let solver = (mk_solver ctx None) in
+	let solver = (Solver.mk_solver ctx None) in
 	Solver.add solver [Boolean.mk_not ctx q];
 	Solver.assert_and_track solver q p;
 	Solver.assert_and_track solver r v;
@@ -719,7 +714,7 @@ let set_core_minimize (solver: Solver.solver): unit = ()
 
 	print(m.eval(x), m.eval(f(3)), m.eval(f(4)))
 *)
-let test27 (ctx: context): unit =
+let test27 (ctx: Z3.context): unit =
 	let three: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 3 in
 	let four: Expr.expr = Arithmetic.Integer.mk_numeral_i ctx 4 in
 	let int_sort: Sort.sort = Arithmetic.Integer.mk_sort ctx in
@@ -730,7 +725,7 @@ let test27 (ctx: context): unit =
 	let temp1: Expr.expr = Arithmetic.mk_gt ctx (FuncDecl.apply f [x]) y in
 	(* f(f(y)) == y *)
 	let temp2: Expr.expr = Boolean.mk_eq ctx (FuncDecl.apply f [(FuncDecl.apply f [y])]) y in
-	let solver = (mk_solver ctx None) in
+	let solver = (Solver.mk_solver ctx None) in
 	Solver.add solver [temp1; temp2];
 	print_check solver []; (* satisfiable *)
 	print_model solver;
@@ -774,9 +769,191 @@ let test27 (ctx: context): unit =
 	| _ -> raise (Failure "cannot eval")) in
 	Printf.printf "m.eval(f(4)): %s\n" (Expr.to_string e3)
 
+(*
+	4.6.1. Statistics
+	print(s.statistics())
+	Printf.printf "%s\n" (Statistics.to_string (Solver.get_statistics solver))
+
+	4.6.2. Proofs
+	print(s.proof())
+	print_proof solver
+
+	4.6.3. Retrieving Solver State
+	s.assertions()
+	Solver.get_assertions : solver -> Expr.expr list
+	Solver.get_assertions solver
+
+	s.units()
+	No same support in OCaml bindings 
+
+	s.non_units()
+	No same support in OCaml bindings
+
+	s.sexpr()
+	Solver.to_string solver
+
+	4.6.4. Cloning Solver State
+	s.translate(ctx)
+	Solver.translate : solver -> context -> solver
+	Solver.translate solver ctx
+
+	4.6.5. Loading formulas
+	s.from_string() and s.from_file() 
+
+	First, use
+	SMT.parse_smtlib2_string : context ->
+	       string ->
+	       Symbol.symbol list ->
+	       Sort.sort list ->
+	       Symbol.symbol list ->
+	       FuncDecl.func_decl list -> AST.ASTVector.ast_vector
+	Parse the given string using the SMT-LIB2 parser.
+	Returns A conjunction of assertions in the scope (up to push/pop) at the end of the string.
+
+	or
+
+	SMT.parse_smtlib2_file : context ->
+	       string ->
+	       Symbol.symbol list ->
+	       Sort.sort list ->
+	       Symbol.symbol list ->
+	       FuncDecl.func_decl list -> AST.ASTVector.ast_vector
+
+	and then use
+
+	AST.ASTVector.to_expr_list : ast_vector -> Expr.expr list
+
+	and then
+
+	Solver.add : solver -> Expr.expr list -> unit
+
+*)
+let test27 (ctx: Z3.context): unit = ()
+
+(*
+	a, b, c, d = Bools('a b c d')
+
+	s = Solver()
+	s.add(Implies(a, b), Implies(c, d))   # background formula
+	print(s.consequences([a, c],          # assumptions
+	                     [b, c, d]))      # what is implied?
+	
+	No same support in OCaml bindings
+*)
+let test28 (ctx: Z3.context): unit = ()
+
+(*
+	s = SolverFor("QF_FD")
+	s.add()
+	s.set("sat.restart.max", 100)
+	def cube_and_conquer(s):
+	    for cube in s.cube():
+	       if len(cube) == 0:
+	          return unknown
+	       if is_true(cube[0]):
+	          return sat     
+	       is_sat = s.check(cube):
+	       if is_sat == unknown:
+	          s1 = s.translate(s.ctx)
+	          s1.add(cube)
+	          is_sat = cube_and_conquer(s1)
+	       if is_sat != unsat:
+	          return is_sat
+	    return unsat
+
+	No same support in OCaml bindings
+*)
+let test29 (ctx: Z3.context): unit = ()
+
+(*
+	TODO
+	def block_model(s):
+	    m = s.model()
+	    s.add(Or([ f() != m[f] for f in m.decls() if f.arity() == 0]))  
+*)
+let test30 (ctx: Z3.context): unit = ()
+
+(*
+	def tt(s, f): 
+	    return is_true(s.model().eval(f))
+
+	def get_mss_base(s, ps):
+	    if sat != s.check():
+	       return []
+	    mss = { q for q in ps if tt(s, q) }
+	    return get_mss(s, mss, ps)
+
+	def get_mss(s, mss, ps):
+	    ps = ps - mss
+	    backbones = set([])
+	    while len(ps) > 0:
+	       p = ps.pop()
+	       if sat == s.check(mss | backbones | { p }):
+	          mss = mss | { p } | { q for q in ps if tt(s, q) }
+	          ps  = ps - mss
+	       else:
+	          backbones = backbones | { Not(p) }
+	    return mss
+*)
+module Ex = struct 
+	type t = Expr.expr 
+	let compare a b: int = Z3.Expr.compare a b 
+end
+module ES = Set.Make(Ex)
+let test31 (ctx: Z3.context): unit = 
+	let tt (s: Solver.solver) (f: Expr.expr): bool = 
+		(match (Solver.get_model s) with
+		| Some m -> 
+			(match (Model.eval m f false) with
+			| Some ex -> Boolean.is_true ex
+			| None -> raise (Failure "no expr"))
+		| None -> raise (Failure "no model")) in
+	let get_mss (s: Solver.solver) (mss: ES.t) (ps: ES.t): ES.t = 
+		let ps_ref: ES.t ref = ref (ES.diff ps mss) in
+		let mss_ref: ES.t ref = ref mss in
+		let backbones_ref: ES.t ref = ref ES.empty in
+		while (ES.cardinal !ps_ref) > 0 do
+			let p: Expr.expr = ES.choose !ps_ref in
+			if Solver.SATISFIABLE = Solver.check s ES.(empty |> add p |> union !mss_ref |> union !backbones_ref |> elements) then
+			begin
+				mss_ref := ES.(empty |> add p |> union !mss_ref |> union (ES.filter (fun q -> tt s q) !ps_ref));
+				ps_ref := (ES.diff !ps_ref !mss_ref)
+			end
+			else backbones_ref := ES.(empty |> add (Boolean.mk_not ctx p) |> union !backbones_ref)
+		done;
+		!mss_ref
+	in
+	let get_mss_base (s: Solver.solver) (ps: ES.t): ES.t = 
+		if Solver.SATISFIABLE <> Solver.check s [] then 
+			ES.empty
+		else
+			let mss: ES.t = ES.filter (fun q -> tt s q) ps in
+			get_mss s mss ps
+	in ()
+
+(*
+	def ff(s, p): 
+	    return is_false(s.model().eval(p))
+
+	def marco(s, ps):
+	    map = Solver()
+	    set_core_minimize(s)
+	    while map.check() == sat:
+	        seed = {p for p in ps if not ff(map, p)}
+	        if s.check(seed) == sat:
+	           mss = get_mss(s, seed, ps)
+	           map.add(Or(ps - mss))
+	           yield "MSS", mss
+	        else:
+	           mus = s.unsat_core()
+	           map.add(Not(And(mus)))
+	           yield "MUS", mus
+	TODO: What is set_core_minimize?
+*)
+let test32 (ctx: Z3.context): unit = ()
 
 let _ = 
 	let cfg = [("model", "true"); ("proof", "true")] in
-	let ctx = (mk_context cfg) in
-	test27 ctx
+	let ctx = (Z3.mk_context cfg) in
+	test31 ctx
 ;;
